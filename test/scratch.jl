@@ -89,28 +89,44 @@ end
 
 function simpmod_example()
     #using ModelingToolkit, DifferentialEquations, Plots
-    @parameters t ks km kd Y HG
-    @variables s(t) b(t) r(t) q(t) dec_s(t) tvr_b(t)
+    @parameters t ks km kd Y HS HB
+    # t in hours
+    # masses per soilmass in mol/g
+    @variables s(t) b(t) cr(t) r_tot(t) q(t) dec_s(t) tvr_b(t) HG
     D = Differential(t)
+    HG ~ HS - Y * HB, # can take out of system because does not involve t
     eqs = [
         dec_s ~ (ks*s*b)/(s + km),
         tvr_b ~ kd*b,
         D(s) ~ -dec_s + tvr_b,
         D(b) ~ Y * dec_s - tvr_b,
-        r ~ (1-Y) * dec_s,
+        r_tot ~ (1-Y) * dec_s,
+        D(cr) ~ r_tot,
         q ~ -HG * dec_s,
         ]
     de = ODESystem(eqs)
     des = structural_simplify(de) # omit r,q
+    p_straw = Dict(
+        :parms => [ks => 0.15, km => 2.62e-6, kd => 1.35e-2, Y => 0.72, 
+            HB => -492, HS => -469],
+        #:x0 => [s => 4.17e-6, b => 1.14e-5, cr => 0] # twutz: wrong in paper
+        :x0 => [s => 4.17e-5, b => 1.14e-5, cr => 0]
+    ) # see S5
     prob = ODEProblem(des, 
         #[s => 1.0, b => 1.0, r => 0.0, q => 0.0],
-        [s => 100.0, b => 1.0],
-        (0.0, 50.0),
-        [ks => 0.5, km => 0.5, kd => 1/20, Y => 0.5, HG => -10]
+        p_straw[:x0],
+        (0.0, 48.0),
+        #[ks => 0.5, km => 0.5, kd => 1/20, Y => 0.5, HG => -10]
+        p_straw[:parms]
     )
-    sol = solve(prob);
+    sol = solve(prob, Rodas5());
     #plot(sol)
-    plot(sol,vars=[s, b, r, q, dec_s]) # r and q are tracked
+    plot(sol,vars=[s, b, cr, dec_s, r_tot])
+    # glucose taken up within 16 hours, but stored in microbial biomass
+    # instead of respired
+    plot(sol,vars=[q], ylim = (0, 800e-6)) 
+    plot(sol,vars=[r_tot], ylim = (0,2e-6))
+    # in the model resp and q only differ by factor (1-Y)/HG 
 end
 
 
@@ -121,12 +137,13 @@ function test_min()
     @variables s(t) b(t) r(t) rO(t) q(t) dec_s(t) tvr_b(t) 
     @variables syn_c_pot(t) syn_n_pot(t) syn(t)
     D = Differential(t)
+    HG = HS - Y * HB
     eqs = [
         dec_s ~ (ks*s*b)/(s + km),
         tvr_b ~ kd*b,
         syn_c_pot ~ Y * dec_s,
         syn_n_pot ~ (dec_s/cn_s + imm_N) * cn_b,
-        syn ~ min(syn_c_pot, syn_n_pot),
+        syn ~ min(syn_c_pot, syn_n_pot), # note the min function
         D(s) ~ -dec_s + tvr_b,
         D(b) ~ +syn - tvr_b,
         r ~ dec_s - syn,
@@ -141,7 +158,8 @@ function test_min()
         (0.0, 50.0),
         [ks => 0.5, km => 0.5, kd => 1/10, Y => 0.5, HG => -10,
         cn_b => 8, cn_s => 20,
-        imm_N => 0.05]
+        imm_N => 0.05];
+        #jac=true # takes longer but ok here
     )
     sol = solve(prob);
     #plot(sol)
@@ -175,6 +193,9 @@ function physmod_example()
         ]
     de = ODESystem(eqs)
     des = structural_simplify(de) # omit r,q
+    p_straw = [ks => 0.15, km => 2.62e-6, kd => 1.35e-2, Y => 0.72, 
+    HB => -492, HS => -469, 
+    kmr => 0.5, ms => 0.5]
     prob = ODEProblem(des, 
         #[s => 1.0, b => 1.0, r => 0.0, q => 0.0],
         [s => 100.0, b => 1.0, r => 0.9],
