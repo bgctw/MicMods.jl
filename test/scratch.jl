@@ -29,6 +29,8 @@ function mtk1
     prob = ODEProblem(structural_simplify(fol_separate), [x => 0.0], (0.0,10.0), [τ => 3.0])
     sol = solve(prob)
     plot(sol, vars=[x,RHS])
+    #sol[RHS] # get the derived variable as Array
+    #hcat(sol.t, (sol[v] for v in (x,RHS))...)
 end    
 
 function lorenz!(du,u,p,t)
@@ -92,9 +94,9 @@ function simpmod_example()
     @parameters t ks km kd Y HS HB
     # t in hours
     # masses per soilmass in mol/g
-    @variables s(t) b(t) cr(t) r_tot(t) q(t) dec_s(t) tvr_b(t) HG
+    @variables s(t) b(t) cr(t) r_tot(t) q(t) dec_s(t) tvr_b(t) 
     D = Differential(t)
-    HG ~ HS - Y * HB, # can take out of system because does not involve t
+    HG = HS - Y * HB # can take out of system because does not involve t
     eqs = [
         dec_s ~ (ks*s*b)/(s + km),
         tvr_b ~ kd*b,
@@ -104,7 +106,7 @@ function simpmod_example()
         D(cr) ~ r_tot,
         q ~ -HG * dec_s,
         ]
-    de = ODESystem(eqs)
+    de = ODESystem(eqs; name=:simpmod)
     des = structural_simplify(de) # omit r,q
     p_straw = Dict(
         :parms => [ks => 0.15, km => 2.62e-6, kd => 1.35e-2, Y => 0.72, 
@@ -119,7 +121,11 @@ function simpmod_example()
         #[ks => 0.5, km => 0.5, kd => 1/20, Y => 0.5, HG => -10]
         p_straw[:parms]
     )
-    sol = solve(prob, Rodas5());
+    #sol = solve(prob);
+    #sol = solve(prob,AutoTsit5(Rodas5()));
+    #sol = solve(prob,lsoda()); # does not work with DAE
+    sol = solve(prob,Rodas5());
+    #sol[r_tot]
     #plot(sol)
     plot(sol,vars=[s, b, cr, dec_s, r_tot])
     # glucose taken up within 16 hours, but stored in microbial biomass
@@ -165,49 +171,5 @@ function test_min()
     #plot(sol)
     plot(sol,vars=[r, rO, syn, syn_c_pot, syn_n_pot]) # r and q are tracked
     plot(sol,vars=[s, b, r, q, dec_s]) # r and q are tracked
-end
-
-function physmod_example()
-    #using ModelingToolkit, DifferentialEquations, Plots
-    @parameters t ks km kd Y HB HS kmr ms
-    @variables s(t) b(t) r_tot(t) q(t) dec_s(t) tvr_b(t)
-    @variables mm_s(t) u1(t) u2(t) r(t) r_gr(t) r_m(t) db(t)
-    D = Differential(t)
-    #mm_s = s/(s + km) 
-    #u1 = b * ks * r * mm_s
-    #u2 = b * ms * (1-r) * mm_s
-    HG = HS - Y * HB
-    eqs = [
-        u1 ~ b * ks * r * s/(s + km),
-        u2 ~ b * ms * (1-r) * s/(s + km),
-        dec_s ~ u1 + u2,
-        tvr_b ~ kd*b,
-        D(s) ~ -dec_s + tvr_b,
-        db ~ Y * u1 - tvr_b, # store output
-        D(b) ~ db,
-        D(r) ~ Y * u1/b * (s/(s+kmr) - r),
-        r_gr ~ (1-Y) * u1,
-        r_m ~ u2,
-        r_tot ~ r_gr + r_m,
-        q ~ -HG * u1 - HS * u2,
-        ]
-    de = ODESystem(eqs)
-    des = structural_simplify(de) # omit r,q
-    p_straw = [ks => 0.15, km => 2.62e-6, kd => 1.35e-2, Y => 0.72, 
-    HB => -492, HS => -469, 
-    kmr => 0.5, ms => 0.5]
-    prob = ODEProblem(des, 
-        #[s => 1.0, b => 1.0, r => 0.0, q => 0.0],
-        [s => 100.0, b => 1.0, r => 0.9],
-        (0.0, 50.0),
-        [ks => 0.5, km => 0.5, kd => 1/20, Y => 0.5, 
-        HB => -492, HS => -469, 
-        kmr => 0.5, ms => 0.5]
-    )
-    sol = solve(prob);
-    #plot(sol)
-    plot(sol,vars=[s, b, r_gr, r_m, dec_s, db]) # r and q are tracked
-    plot(sol,vars=[r]) # r and q are tracked
-    plot(sol,vars=[q]) # r and q are tracked
 end
 
