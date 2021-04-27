@@ -1,11 +1,12 @@
 module MicMods
 
-using ModelingToolkit
+using ModelingToolkit, OrderedCollections
 
-export chak21_simp_system, chak21_phys_system
+export chak21_simp_system, chak21_phys_system, chak21_growth_system,
+    indexof, unum, pnum, constructparsetter
 
-include("chakrawal21/chakrawal21simp.jl")
-include("chakrawal21/chakrawal21phys.jl")
+
+include("chakrawal21/base.jl")
 
 # Write your package code here.
 

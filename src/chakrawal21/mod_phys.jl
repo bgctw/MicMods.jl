@@ -25,15 +25,15 @@ function chak21_phys_system()
         q ~ -HG * u1 - HS * u2,
         ]
     @named chak21_phys = ODESystem(eqs)
-    chak21_phys_s = structural_simplify(chak21_phys) 
-    p_straw = Dict(
-        :parms => [ks => 0.15, km => 2.62e-6, kd => 1.35e-2, Y => 0.72, 
+    syss = structural_simplify(chak21_phys) 
+    # see S5 for strawN
+    parms = [ks => 0.15, km => 2.62, kd => 1.35e-2, Y => 0.72, 
             HB => -492, HS => -469,
             kmr => 1e-9, # half-saturation low so that optimum r -> 1
             ksm => 0.15, # uptake for P (maint comp) equal that for U (growth)
-            ],
-        :x0 => [s => 4.17e-5, b => 1.14e-5, cr_tot => 0, r => 1]
-    ) # see S5
-    chak21_phys_s, chak21_phys, p_straw
+            ]
+    x0 = [s => 4.17e-5*1e6, b => 1.14e-5*1e6, cr_tot => 0, r => 1]
+    prob = chak21_problem(syss, x0, parms)
+    (prob = prob, syss = syss, sys = chak21_phys, x0 = x0, parms = parms)
 end
 
