@@ -5,23 +5,7 @@ end
 indexof(sym,syms) = findfirst(isequal(sym),syms)
 
 """
-    unum(sym::Symbol, system)
-    pnum(sym::Symbol, system)
-
-Get the `Num` associated with given symbol of state or parameter respectively.
-
-# Examples
-```jldoctest am; output = false, setup = :()
-true
-# output
-true
-```
-"""
-unum(sym::Symbol,system) = states(system.syss)[system.statespos[sym]],
-pnum(sym::Symbol,system) = parameters(system.syss)[system.parmspos[sym]]
-
-"""
-    constructparsetter(system, paramnums = keys(system.searchranges_p), statenums = keys(system.searchranges_u0))
+    constructparsetter(system, paropt = keys(system.searchranges_p), stateopt = keys(system.searchranges_u0))
 
 Optimization parameter vector includes a subset of model parameters and a subset 
 of initial conditions. This function helps to translate between a vector of
@@ -36,8 +20,8 @@ It returns a tuple of two functions
 # Arguments
 - `system`: tuple with Dicitonary fields `parmspos` and `statespos` that map 
   symbols to positions in the vectors.
-- `paramnums`: a generator of `Num`s corresponding to parameters optimized
-- `statenums`: a generator of `Num`s corresponding to states optimized
+- `paropt`: a generator of `Num`s corresponding to parameters optimized
+- `stateopt`: a generator of `Num`s corresponding to states optimized
 
 # Examples
 ```jldoctest am; output = false, setup = :()
@@ -46,40 +30,55 @@ true
 true
 ```
 """
-function constructparsetter(system, paramnums = keys(system.searchranges_p), statenums = keys(system.searchranges_u0))
-    ppos = system.parmspos
-    ipar = collect(1:length(parameters(system.syss)))
-    ispopt = falses(length(ppos))   
-    upos = system.statespos
-    iu = collect(1:length(states(system.syss)))
-    isuopt = falses(length(upos))
-    i,pname = first(enumerate(paramnums))
-    for (i,pname) = enumerate(paramnums)
-        pos = ppos[Symbol(pname)]
-        ispopt[pos] = true
-        ipar[pos] = i
-    end         
-    i,uname = first(enumerate(statenums))
-    for (i,uname) = enumerate(statenums)
-        pos = upos[Symbol(uname.val.f.name)]
-        isuopt[pos] = true
-        iu[pos] = length(paramnums) + i
-    end         
-    function setpu(popt, prob)
-        ([ispopt[i] ? popt[ipar[i]] : prob.p[ipar[i]] for i in axes(prob.p,1)],
-        [isuopt[i] ? popt[iu[i]] : prob.u0[iu[i]] for i in axes(prob.u0,1)])
-    end
-    function getpopt(prob)
-        vcat(
-            prob.p[getindex.(Ref(system.parmspos), (num.val.name for num in paramnums))],
-            prob.u0[getindex.(Ref(system.statespos), (num.val.f.name for num in statenums))]
-            )
-    end
-    poptnums = [paramnums..., statenums...]
-    setpu, getpopt, poptnums
-end
+# deprecated, superseded by struct ParSetter in parsetter.jl
+# function constructparsetter(system::ModelingToolkit.AbstractSystem, paropt, stateopt)
+#     parsys = convert.(Num,parameters(system))::Vector{Num}
+#     statesys = convert.(Num,states(system))::Vector{Num}
+#     ipar = collect(1:length(parsys))
+#     ispopt = falses(length(parsys))   
+#     iu = collect(1:length(statesys))
+#     isuopt = falses(length(statesys))
+#     posparopt = zeros(Int8, length(paropt))
+#     posstateopt = zeros(Int8, length(stateopt))
+#     #i,num = first(enumerate(paropt))
+#     for (i,num) = enumerate(paropt)
+#         pos = findfirst(isequal(num), parsys)
+#         ispopt[pos] = true
+#         ipar[pos] = i
+#         posparopt[i] = pos
+#     end         
+#     #i,num = first(enumerate(stateopt))
+#     for (i,num) = enumerate(stateopt)
+#         pos = findfirst(isequal(num), statesys)
+#         isuopt[pos] = true
+#         iu[pos] = length(paropt) + i
+#         posstateopt[i] = pos
+#     end         
+#     function setpu(popt, prob)
+#         ([ispopt[i] ? popt[ipar[i]] : prob.p[ipar[i]] for i in axes(prob.p,1)],
+#         [isuopt[i] ? popt[iu[i]] : prob.u0[iu[i]] for i in axes(prob.u0,1)])
+#     end
+#     function getpopt(prob)
+#         vcat(prob.p[posparopt], prob.u0[posstateopt])
+#     end
+#     states_map = OrderedDict(Symbol(x.val.f.name) => x for x in statesys)
+#     parameters_map = OrderedDict(Symbol(x.val.name) => x for x in parsys)
+#     observed_map = OrderedDict(Symbol(x.lhs.f.name) => x.lhs for x in observed(system))
+#     num = merge(states_map, parameters_map, observed_map)
+#     (setpu = setpu, getpopt = getpopt, posparopt = posparopt, posstateopt = posstateopt, 
+#     num = num)
+# end
+
+# function constructparsetter(systemt::NamedTuple, 
+#     paropt = keys(systemt.searchranges_p), 
+#     stateopt = keys(systemt.searchranges_u0)
+#     )
+#     constructparsetter(systemt.syss, paropt, stateopt)
+# end
+
 
 include("mod_simp.jl")
 include("mod_phys.jl")
 include("mod_growth.jl")
-
+include("mod_growth_closed.jl")
+include("mod_phys_fixedr.jl")

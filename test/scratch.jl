@@ -173,3 +173,14 @@ function test_min()
     plot(sol,vars=[s, b, r, q, dec_s]) # r and q are tracked
 end
 
+function test_local()
+    x = "bla"
+    function inner(arr)
+        local x,y
+        x, y = arr
+        x
+    end
+    ans = inner( (2,4))
+end
+
+

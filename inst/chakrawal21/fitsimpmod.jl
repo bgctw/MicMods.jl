@@ -1,31 +1,34 @@
 using MicMods
 using ModelingToolkit, DifferentialEquations
 using Plots
-using DiffEqFlux, Flux
 using RecursiveArrayTools
 
 # solve physiological and simple system with straw-N parameters
 # for kmr small r->1 they should yield the same prediction 
 
-# system = chak21_simp_system();
-# system = chak21_growth_system();
-# system = chak21_simp_system();
+# systemt = chak21_simp_system();
+# systemt = chak21_growth_system();
+# systemt = chak21_simp_system();
 
 fsystems = Dict(
-    :growth => chak21_growth_system, 
+    #:growth => chak21_growth_system, 
     :simp => chak21_simp_system, 
     #:phys => chak21_phys_system,
     )
 systems = Dict(map(zip(keys(fsystems),values(fsystems))) do (key, f)
     Pair(key, f())
 end); 
-system = first(systems).second;
+sysid = :simp
+sysid = :growth
+sysid = first(systems).first
+systemt = systemt = systems[sysid];
 
-@variables t q(t) r_tot(t)
+
+#@variables t q(t) r_tot(t)
 #@variables s(t) b(t) cr_tot(t) dec_s(t) r(t)
 #@variables dec_s(t) tvr_b(t)
 
-mapdict(f,d) = Dict(pair.first => f(pair.second) for pair in d)
+#mapdict(f,d) = Dict(pair.first => f(pair.second) for pair in d)
 # d2 = Dict(:a => (1,2), :b => (3,4))
 # mapdict(d2) do x
 #     2 .* x
@@ -36,34 +39,35 @@ function compute_sols()
     function solve_chak21(prob, x0vec, pvec)
         #sol = solve(prob, Rodas5(), p=p, x0 = x0, isoutofdomain=hasnegativestate);
         sol = solve(prob, AutoTsit5(Rosenbrock23()), p = pvec, x0 = x0vec);
-        @assert all(sol[system.states[:s]] .+ sol[system.states[:b]] .+ 
-            sol[system.states[:cr_tot]] .≈ sum(x0vec[1:2]))
+        @assert all(sol[systemt.states[:s]] .+ sol[systemt.states[:b]] .+ 
+            sol[systemt.states[:cr_tot]] .≈ sum(x0vec[1:2]))
         sol
     end
-    sols = mapdict(systems) do system
-        pvec = ModelingToolkit.varmap_to_vars(system.parms, parameters(system.syss))
-        x0vec = ModelingToolkit.varmap_to_vars(system.x0, states(system.syss))
-        sol = solve_chak21(system.prob, x0vec, pvec)
+    sols = mapdict(systems) do systemt
+        pvec = ModelingToolkit.varmap_to_vars(systemt.parms, parameters(systemt.syss))
+        x0vec = ModelingToolkit.varmap_to_vars(systemt.x0, states(systemt.syss))
+        sol = solve_chak21(systemt.prob, x0vec, pvec)
     end;
     @assert all(isapprox.(sols[:phys](48.0)[1:3], sols[:simp](48.0), atol=0.01))
     @assert all(isapprox.(sols[:simp](48.0), sols[:phys](48.0)[1:3], atol=0.01))
 end
 
-sysid = :simp
-sysid = :growth
-#sol = sols[sysid]; 
-system = systems[sysid];
-
 
 function tmp_inspectsol()
     #plot(sol)
     #plot(sol,vars=[s, b, cr_tot, dec_s, r_tot])
-    plot(sol,vars=getindex.(Ref(system.states),[:s,:b,:cr_tot]))
-    plot!(sol.t, sol[system.observed[:r_tot]], label="r_tot")
-    plot(sol.t, sol[system.observed[:q]], label="q")
+    sol = soltrue;
+    #sol = solp_true;
+    plot(sol)
+    plot(sol,vars=[ps.num[:r]])
+    plot(sol,vars=getindex.(Ref(systemt.states),[:s,:b,:cr_tot]))
+    plot!(sol.t, sol[systemt.observed[:r_tot]], label="r_tot")
+    plot(sol.t, sol[systemt.observed[:q]], label="q")
+    #plot(sol.t, predq_true, label = "predq_true")
+    #plot(sol.t, predq, label = "predq")
     scatter!(sol.t, obsq, label="obsq")
     #scatter!(sol.t, predq, label="predq_i")
-    plot!(solp.t, solp[system.observed[:q]], label = "q_pred")
+    plot!(solp.t, solp[ps.num[:q]], label = "q_pred")
     xlim = (17,18)
     bt = (sol.t .>= 17) .& (sol.t .<= 18)
     plot(sol,vars=[s, b, cr_tot, dec_s, r_tot], xlim = xlim)
@@ -79,48 +83,68 @@ end
 
 
 using Statistics
-DifferentialEquations.parameters(system.syss)
-states(system.syss)
-setpu, getpopt, poptnums = constructparsetter(system);
-p = getpopt(system.prob) 
-pp, u0p = setpu(p, system.prob)
-@assert all(pp .== system.prob.p)
-@assert all(u0p .== system.prob.u0)
-# todo write macro to generate loss function for specific parameters
-#pvec_true = ModelingToolkit.varmap_to_vars(system.parms, parameters(system.syss))
-#x0vec_true = ModelingToolkit.varmap_to_vars(system.x0, states(system.syss))
+# ps = constructparsetter(systemt);
+# p = ps.getpopt(systemt.prob) 
+#ps = ParSetter(systemt);
+pss = Dict(
+    :phys => ParSetter(systemt; stateopt=[]),
+    :growth => ParSetter(systemt; paropt=[])
+);
+ps = pss[sysid]
+p = getpopt(ps, systemt.prob) 
+#popt_names = [ps.keys(systemt.searchranges_p)..., keys(systemt.searchranges_u0)...]
+popt_names = [ps.paropt..., ps.stateopt...]
+
+
+#pvec_true = ModelingToolkit.varmap_to_vars(systemt.parms, parameters(systemt.syss))
+#x0vec_true = ModelingToolkit.varmap_to_vars(systemt.x0, states(systemt.syss))
 solver = AutoTsit5(Rosenbrock23());
 #solver = Rodas4();
-soltrue = solve(system.prob, solver, p=system.prob.p, x0 = system.prob.u0);
-obsqtrue = soltrue[system.observed[:q]];
-obsq = obsqtrue .+ median(obsqtrue)/10*randn(size(obsqtrue));
+soltrue = solve(systemt.prob, solver, p=systemt.prob.p, x0 = systemt.prob.u0);
+obsqtrue = soltrue[ps.num[:q]];
+σ_obsq = (t -> t[2] - t[1])(extrema(obsqtrue))/10
+obsq = obsqtrue .+ σ_obsq*randn(size(obsqtrue));
 #pvec_tmp = copy(pvec_true); x0vec_tmp = copy(x0vec_true);
-function floss(p)
-    # pp = vcat(p[1:4], system.prob.p[5:end])
-    # #u0p = convert.(eltype(p),system.prob.u0)
-    # u0p = vcat(system.prob.u0[1], p[5], system.prob.u0[3])
-    pp, u0p = pset(p, system.prob.p, system.prob.u0)
-    probp = remake(system.prob; p = pp, u0 = u0p)
-    #@show pp
-    #solp = solve(probp; saveat = tsteps)
-    solp = solve(probp; solver, 
-        maxiters = 1000, # stop early if cannot determine sol
-        isoutofdomain = (u, p, t) -> (any(ui < zero(ui) for ui in u)),
-    );
-    lossval = any(solp.retcode != :Success) ? convert(eltype(p),Inf)::eltype(p) : begin
-      predobs = system.predout.(solp.u, Ref(pp), Ref(system));
-      predq = [obs.q for obs in predobs];
-      #predq = solp[q]
-      lossval = sum(abs2, predq .- obsq)
+function getfloss(systemt, solver, ps, obsq)
+    # put into closure so that types can be inferred
+    function floss_(p)
+        # pp = vcat(p[1:4], systemt.prob.p[5:end])
+        # #u0p = convert.(eltype(p),systemt.prob.u0)
+        # u0p = vcat(systemt.prob.u0[1], p[5], systemt.prob.u0[3])
+        #pp, u0p = ps.setpu(p, systemt.prob)
+        pp, u0p = setpu(ps, p, systemt.prob)
+        probp = remake(systemt.prob; p = pp, u0 = u0p)
+        # #@show pp
+        solp = solve(probp, solver, 
+            maxiters = 1000, # stop early if cannot determine sol
+            #isoutofdomain = (u, p, t) -> (any(ui < zero(ui) for ui in u)),
+        );
+        if any(solp.retcode != :Success) 
+            lossval = convert(eltype(p),Inf)::eltype(p) 
+            predq = zeros(length(obsq))
+        else
+            # fixed problems in gradient and is not type-stable
+           predq = solp[ps.num[:q]]::typeof(obsq) 
+        #   predobs = systemt.predout.(solp.u, Ref(pp));
+        #   predq = [obs.q for obs in predobs];
+          lossval = sum(abs2, predq .- obsq)
+        end
+        return lossval, solp, predq
     end
-    return lossval, solp
 end
-#@code_warntype(floss(p)) # solp of type Any?
-p[1] = 0.1; p[2:5] .*= 0.8; lossval, solp = floss(p); lossval
-popt_true = vcat(system.prob.p[1:4], system.prob.u0[2])
-lossval_true, solp_true = floss(popt_true); lossval_true
+#@code_warntype systemt.predout(solp.u[1], pp) # finally with let ok
+#@code_warntype setpu(ps, p, systemt.prob) # ok
+floss = getfloss(systemt, solver, ps, obsq);
+#@code_warntype floss(p) # solp of type Any?glo
+#@code_warntype(ps.num[:q]) # ok
+@code_warntype solp_true[]
+
+p = getpopt(ps, systemt.prob); p .*= 0.8; lossval, solp, predq = floss(p); lossval
+popt_true = getpopt(ps, systemt.prob)
+lossval_true, solp_true, predq_true = floss(popt_true); lossval_true
 
 function optim_Zygote()
+    using DiffEqFlux, Flux
     using Zygote
     gr = gradient(x -> floss(x)[1],p)
     gr = gradient(x -> floss(x)[1],pvec_true[[1]])
@@ -137,8 +161,8 @@ function optim_Zygote()
 
     result_ode1 = result_ode = DiffEqFlux.sciml_train(
         floss, p, ADAM(0.1), cb = callback, maxiters = 100)
-    lossval, solp = floss(result_ode.minimizer); lossval
-    hcat(system.prob.p[1:3], result_ode1.minimizer, p )
+    lossval, solp, predq = floss(result_ode.minimizer); lossval
+    hcat(systemt.prob.p[1:3], result_ode1.minimizer, p )
 end
 
 function optim_Optim()
@@ -147,8 +171,14 @@ function optim_Optim()
     result_ode2 = optimize(floss1, p, Optim.Options(show_trace = true, time_limit = 2*60.0)) # faster than with autodiff here
     #result_ode2 = optimize(floss1, p, LBFGS()) # faster than with autodiff here
     #result_ode2 = optimize(x -> floss(x)[1], p, LBFGS(), Optim.Options(show_trace = true, time_limit = 2*60.0); autodiff = :forward) 
-    hcat(system.prob.p[1:3], result_ode2.minimizer, p )
-    lossval2, solp2 = floss(result_ode2.minimizer); lossval2
+    hcat(systemt.prob.p[1:3], result_ode2.minimizer, p )
+    lossval2, solp2, predq = floss(result_ode2.minimizer); lossval2
+end
+
+function bboptimize_ctrl(functionOrProblem, parameters::BlackBoxOptim.Parameters = BlackBoxOptim.EMPTY_PARAMS; kwargs...)
+    optctrl = BlackBoxOptim.bbsetup(functionOrProblem, parameters; kwargs...)
+    res = BlackBoxOptim.run!(optctrl)
+    res, optctrl
 end
 
 function optim_blackbox()
@@ -158,20 +188,172 @@ function optim_blackbox()
     # end
     # res = bboptimize(rosenbrock2d; SearchRange = (-5.0, 5.0), NumDimensions = 2);
     # best_candidate(res)
-    DifferentialEquations.parameters(system.syss)      
+    DifferentialEquations.parameters(systemt.syss)      
     floss1b(p) = floss(p)[1]
-    res = bboptimize(floss1b; SearchRange = [
-        (0.005, 1.0),   #ks
-        (0.005, 1.0),   #ksm
-        (0.1, 10.0),    #km
-        (1/200, 1/10),  #kd
-        (0.1, 0.8),  #Y
-        #(0.1, 1/10),  #s0 is fixed
-        (1.0, 100.0),  #b0
-        ]);
+    sr = [systemt.searchranges_p..., systemt.searchranges_u0...]
+    res, optctrl = bboptimize_ctrl(floss1b; SearchRange = [p.second for p in sr], MaxTime = 20);
     hcat(popt_true, best_candidate(res), p )
     lossval, solp = floss(best_candidate(res)); lossval
-  
+
+    arch = optctrl.runcontrollers[1].evaluator.archive;
+    cands = arch.candidates;
+    [fitness(x) for x in cands]
+    pa = VectorOfArray([x.params for x in cands]);
+    #size(pa)
+    pa[1,:] # 1: km almost all the same - no spread
+    pa[3,:] # 3: Y
+    # to explore the model, use Bayesian, look into Turing.jl and Tpapp
+end
+
+function test_distfit()
+    r = systemt.searchranges_p[ps.num[:Y]]
+    dn = truncnormalfromrange(r[1:2]...)
+    hcat(quantile.(dn, [0.025, 0.975]), collect(r))
+    dln = trunclognormalfromrange(r[1:2]...)
+    hcat(quantile.(dln, [0.025, 0.975]), collect(r))
+    dltn = trunclogitnormalfromrange(r[1:2]...)
+    hcat(quantile.(dltn, [0.025, 0.975]), collect(r))
+    r = systemt.searchranges_p[ps.num[:ks]]
+    r = systemt.searchranges_u0[ps.num[:r]]
+    dp = gettruncdist(r...)
+    function tmp()
+        using StatsPlots
+        plot(dn)
+        plot!(dln)
+        plot!(dltn)
+        plot(dp)
+    end
+end
+
+
+function optim_turing()
+    using Turing, FillArrays, MCMCChains
+    using StatsPlots
+    import Random
+    #Turing.setadbackend(:zygote)
+    Turing.setadbackend(:forwarddiff)
+    # dn = Normal(0.5, 0.3)
+    # pobs = rand(dn, 20)
+    # @model function testpopt(pobs, ::Type{T} = Float64) where {T}
+    #     # test sampling the mean of on p1
+    #     # m ~ Normal(0, 2)
+    #     #pobs ~ MvNormal(Fill(m, length(pobs)), dn.σ)
+    #     p = Vector{T}(undef, 1)
+    #     for i = 1:1
+    #          p[i] ~ Normal(0, 2)
+    #     end
+    #     #p = [Normal(0,2) for i in [1]]
+    #     pobs ~ MvNormal(Fill(p[1], length(pobs)), dn.σ)
+    # end
+    # model_func = testpopt(pobs)
+    # chn = sample(model_func, NUTS(0.65), 1000, )
+    #plot(chn)
+    sr = vcat(
+        [systemt.searchranges_p[key] for key in ps.paropt],
+        [systemt.searchranges_u0[key] for key in ps.stateopt]
+    )
+    # uses: sr, floss, σ_obsq
+    @model function fitq(qobs, ::Type{T} = Float64) where {T}
+        p = Vector{T}(undef, length(sr))
+        for (i,r) = enumerate(sr)
+             p[i] ~ gettruncdist(r...)
+        end
+        if !isa(_context, Turing.PriorContext)
+            lossval, solp, predq = floss(p);
+            if !isfinite(lossval) 
+                Turing.@addlogprob! -Inf; return
+            end
+            #predq = Fill(sum(p), length(obsq))
+            for (i, qp) = enumerate(predq)
+                qobs[i] ~ Normal(qp, σ_obsq)
+            end
+        end
+    end
+    model_func = fitq(obsq)
+    #chn = chn0 = sample(model_func, NUTS(), 10)
+    Random.seed!(0815)
+    chn = chn0 = sample(model_func, NUTS(),  MCMCThreads(), 40, 3)
+    chn = replacenames(chn0, Dict("p[$i]" => pname for (i,pname) in 
+         enumerate(MicMods.replacetby0(popt_names))))
+    # drop the 1st chain
+    #chn = chn[:,:,[2,3]]
+    # resample using 
+    chn = chn1 = sample(model_func, NUTS(),  MCMCThreads(), 400, 3, 
+        theta_init = MicMods.best_estimate(chn0));
+#        theta_init = popt_true);
+    chn = replacenames(chn1, Dict("p[$i]" => pname for (i,pname) in 
+        enumerate(replacetby0(popt_names))))
+    tmp = Array(chn[:,:,[2,3]]);
+    chn = Chains(reshape(tmp, (size(tmp)...,1)), chn.name_map.parameters) 
+    function interactive_plotchains()
+        plot(chn)
+        corner(chn)
+        map(display, plotchain(get(chn, :log_density)));
+        plot_post_and_priors(systemt, ps, chn)
+    end
+end
+
+function tmp_predict()
+    using AxisArrays
+    pa0 = Array(chn)
+    pa = AxisArray(Array(chn); row = axes(pa0,1), col = chn.name_map.parameters)
+
+    vec(pa[:,:kd])
+    lossval, solp, predq = floss(pa0[1,:])
+    plot(solp.t, predq, label = "model fit")
+    scatter!(solp.t, obsq, label = "observations", ylab="heat", xlab = "time (hours)")
+end
+
+
+function optim_turing_Gibbs()
+    using Turing, FillArrays, MCMCChains
+    using StatsPlots
+    import Random
+    #Turing.setadbackend(:zygote)
+    Turing.setadbackend(:forwarddiff)
+    sr = vcat(
+        [systemt.searchranges_p[key] for key in ps.paropt],
+        [systemt.searchranges_u0[key] for key in ps.stateopt]
+    )
+    # uses: sr, floss, σ_obsq
+    @model function fitq(qobs, ::Type{T} = Float64) where {T}
+        p = Vector{T}(undef, length(sr))
+        for (i,r) = enumerate(sr)
+             p[i] ~ gettruncdist(r...)
+        end
+        if !isa(_context, Turing.PriorContext)
+            lossval, solp, predq = floss(p);
+            if !isfinite(lossval) 
+                Turing.@addlogprob! -Inf; return
+            end
+            #predq = Fill(sum(p), length(obsq))
+            for (i, qp) = enumerate(predq)
+                qobs[i] ~ Normal(qp, σ_obsq)
+            end
+        end
+    end
+    model_func = fitq(obsq)
+    #chn = chn0 = sample(model_func, NUTS(), 10)
+    Random.seed!(0815)
+    chn = chn0 = sample(model_func, NUTS(),  MCMCThreads(), 40, 3)
+    chn = replacenames(chn0, Dict("p[$i]" => pname for (i,pname) in 
+         enumerate(MicMods.replacetby0(popt_names))))
+    # drop the 1st chain
+    #chn = chn[:,:,[2,3]]
+    # resample using 
+    chn = chn1 = sample(model_func, NUTS(),  MCMCThreads(), 400, 3, 
+        theta_init = MicMods.best_estimate(chn0));
+#        theta_init = popt_true);
+    chn = replacenames(chn1, Dict("p[$i]" => pname for (i,pname) in 
+        enumerate(replacetby0(popt_names))))
+    tmp = Array(chn[:,:,[2,3]]);
+    chn = Chains(reshape(tmp, (size(tmp)...,1)), chn.name_map.parameters) 
+    function interactive_plotchains()
+        plot(chn)
+        corner(chn)
+        map(display, plotchain(get(chn, :log_density)));
+        plot_post_and_priors(systemt, ps, chn)
+    end
 end
 
 

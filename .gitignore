@@ -3,3 +3,4 @@
 *.jl.mem
 /Manifest.toml
 /docs/build/
+inst/chak21_syn.jls
