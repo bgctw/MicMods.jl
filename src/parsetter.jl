@@ -121,6 +121,11 @@ function ParSetter(parsys::AbstractVector{Num},statesys::AbstractVector{Num},
         num)
 end
 
+getpoptnames(ps::ParSetter) = vcat(
+    map(x -> Symbol(x.val.name), ps.paropt), 
+    map(x -> Symbol(x.val.f.name), ps.stateopt))
+
+
 
 """
     setpu(ps::ParSetter, popt, prob)
@@ -249,6 +254,7 @@ Value: Integer or nothing
 function stateindex(ps::ParSetter, sym::Symbol)
     i = findfirst(map(u -> u.val.f.name, ps.statesys) .== sym)
 end
+
 
 
 

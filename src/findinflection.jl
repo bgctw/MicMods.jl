@@ -14,7 +14,7 @@ true
 true
 ```
 """
-find_inflection = function(x,y)
+function find_inflection(x,y)
     #x=t;y=obsr_tot;
     # first smooth the series and find the maximum of the growth curve
     ml1 = ml = loess(y,y, span = 0.2)
@@ -39,6 +39,34 @@ function iplot()
     plot(x[1:imax], p3.(x[1:imax]))
     plot(x[1:imax], d1.(x[1:imax]))
     plot(x[1:imax], d2.(x[1:imax]))
-
-
 end
+
+function negate(f)
+    local fc = f
+    function negate(args...; kwargs...)
+        -fc(args...; kwargs...)
+    end
+end
+
+function find_max(x,y, p_untilmax=0.9)
+    #using Loess, Optim, QuadGK
+    #x=chak21syn.solsyn.t ;y=chak21syn.obsr_tot;
+    # first smooth the series and find the maximum of the growth curve
+    ml = loess(x, y, span = 0.2)
+    #imax = findmax(predict(ml1,x))[2]
+    ex = extrema(x)
+    #ftmp(x) = predict(ml, x)
+    xinfl0 = Optim.minimizer(optimize(x -> -predict(ml,x), ex[1], ex[2]))
+    xinfl0, ml
+    # int0, err = quadgk(ftmp, ex[1], xinfl0)
+    # # start a bit before maximum
+    # xinfl1 = p_untilmax * xinfl0
+    # int1, err = quadgk(ftmp, ex[1], xinfl1)
+    # xinfl0, int0, xinfl1, int1
+end
+
+function integrate_smoother(x, y, tend, t0  = zero(tend); ml = loess(x, y, span = 0.2)
+    )
+    int0, err = quadgk(x -> predict(ml,x), t0, tend)
+end
+
