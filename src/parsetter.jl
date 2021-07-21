@@ -162,19 +162,25 @@ end
 #             popt[ps.iopt_for_iusys[i]] : u0[i] for i in axes(u0,1))
 #     (pnew, u0new)
 # end
-function setpu(ps::ParSetter, popt, p, u0, ::Val{Labeled} = Val(false)) where Labeled
+function setpu(ps::ParSetter, popt, p, u0) 
     # eltype of new p aund u0 should correspond to eltype of popt
     pnew = p .* zero(eltype(popt)) .+ (ps.ispopt[i] ? 
              popt[ps.ipopt_for_ipsys[i]] : p[i] for i in axes(p,1)) 
     u0new = u0 .* zero(eltype(popt)) .+ (ps.isuopt[i] ? 
             #note usage of popt[iopt] , indexing into the full optim vector with u after p
             popt[ps.iopt_for_iusys[i]] : u0[i] for i in axes(u0,1))
-    !Labeled && return((pnew, u0new))
-    (
-        label_parsys(ps, pnew),
-        label_statesys(ps, u0new),
-    )
+    (pnew, u0new)
 end
+
+function setpu_labeled(ps::ParSetter, popt, p, u0)
+    # eltype of new p aund u0 should correspond to eltype of popt
+    pnew, u0new = setpu(ps, popt, p, u0)
+        (
+            label_parsys(ps, pnew),
+            label_statesys(ps, u0new),
+        )
+end
+
 
 """
     label_parsys(ps::ParSetter, popt)
@@ -182,7 +188,12 @@ end
 Create an LVector from parameter vector
 """
 function label_parsys(ps::ParSetter, p)
-    LVector(NamedTuple{map(x -> x.val.name, ps.parsys).data}(p))
+    #LVector(NamedTuple{map(x -> x.val.name, ps.parsys).data}(p))
+    #LVector(NamedTuple{Tuple(x.val.name for x in ps.parsys)}(p))
+    NamedTuple{(:a,:b,:c)}(p)
+
+    #NamedTuple{ntuple(i -> ps.parsys[i], length(ps.parsys))}(p)
+    #LVector(NamedTuple{ntuple(i -> ps.parsys[i], length(ps.parsys))}(p))
 end
 
 """

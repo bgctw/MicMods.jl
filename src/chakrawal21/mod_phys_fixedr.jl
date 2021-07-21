@@ -54,25 +54,27 @@ function chak21_fixedr_system()
         (ks,km,kd,Y,r,HB,HS))
     #states_map = OrderedDict(x.f.name => x for x in states(syss))
     prob = chak21_problem(syss, x0, parms)
-    # parmspos and λ from closure
-    # function predout(u,p)
-    #     local s,b,r,cr, 
-    #         ks, km, kd, Y, HB, HS, kmr,
-    #         u1,u2,ksm,
-    #         dec_s, r_gr, r_m, r_tot, HG, q
-    #     s,b,cr,r = u
-    #     ks, km, kd, Y, HB, HS, kmr = (p[pos] for pos in values(parmspos))
-    #     ksm = ks * (1/λ -1) # ksm = 0.11 ks
-    #     u1 = b * ks * r * s/(s + km)
-    #     u2 = b * ksm * (1-r) * s/(s + km)
-    #     dec_s = u1 + u2
-    #     r_gr = (1-Y) * u1
-    #     r_m = u2
-    #     r_tot = r_gr + r_m
-    #     HG = HS - Y * HB # can take out of system because does not involve t
-    #     q = -HG * u1 - HS * u2
-    #     (dec_s = dec_s, r_tot = r_tot, q = q)
-    # end
+    # parmspos from closure
+    function predout(u,p)
+        local s,b,r,cr, 
+            ks, km, kd, Y, HB, HS, kmr,
+            u1,u2,ksm,
+            dec_s, r_gr, r_m, r_tot, HG, q
+        s,b,cr = u
+        # @show p
+        # @show parmspos
+        ks,km,kd,Y,r,HB,HS = (p[pos] for pos in values(parmspos))
+        ksm = estimate_ksm(ks)  #ks * (1/λ -1) # ksm = 0.11 ks
+        HG = HS - Y * HB 
+        u1 = b * ks * r * s/(s + km)
+        u2 = b * ksm * (1-r) * s/(s + km)
+        dec_s = u1 + u2
+        r_gr = (1-Y) * u1
+        r_m = u2
+        r_tot = r_gr + r_m
+        q = -HG * u1 - HS * u2
+        (dec_s = dec_s, r_tot = r_tot, q = q)
+    end
     function adjust_p0u0(p,u)
         # subtract biomass from initial substrate, 
         # initial substrate must be set as s0 + b0 - resp_gr:
@@ -85,7 +87,7 @@ function chak21_fixedr_system()
         # sys = chak21_simp, x0 = x0, parms = parms, 
         # parmspos = parmspos, states = states_map, observed = observed_map,
         searchranges_p = searchranges_p, searchranges_u0 = searchranges_u0,
-        predout = (u,p) -> error("predout not implemented for chak21_fixedr"),
+        predout = predout, #(u,p) -> error("predout not implemented for chak21_fixedr"),
         adjust_p0u0 = adjust_p0u0,
         )
 end

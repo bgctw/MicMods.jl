@@ -1,8 +1,9 @@
 module MicMods
 
-using Base: thread_notifiers
+using Base: thread_notifiers, Forward
 using ModelingToolkit, OrderedCollections
 using Distributions, StatsFuns
+using DifferentialEquations
 using MCMCChains
 using StaticArrays, LabelledArrays
 using Loess, Polynomials, Optim, QuadGK
@@ -10,7 +11,9 @@ using Loess, Polynomials, Optim, QuadGK
 export chak21_simp_system, chak21_phys_system, chak21_growth_system,
     chak21_growth_closed, chak21_fixedr_system,
     indexof, ParSetter, getpopt, setpu, parindex, stateindex, 
-    label_parsys, label_statesys, label_popt, getpoptnames,
+    label_parsys, label_statesys, label_popt, getpopt_static, 
+    getpoptnames, getparsys, getstatesys, getpopt,getsopt,
+    LabeledParSetter,
     gettruncdist,
     kinresp_mic, kinresp_exp,
     micfromcoef,
@@ -20,6 +23,7 @@ export chak21_simp_system, chak21_phys_system, chak21_growth_system,
 include("util.jl")
 include("findinflection.jl")
 include("parsetter.jl")
+include("parsetter_labeled.jl")
 include("distfit.jl")
 include("chakrawal21/base.jl")
 include("kinresp/base.jl")

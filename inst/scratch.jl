@@ -31,15 +31,20 @@ function tmpf()
     # bettern return zeros(3) instead of nothing
 end
 
-function _negate(f)
-    local fc = f
-    function negate(args...; kwargs...)
-        -fc(args...; kwargs...)
-    end
-end
+LVector(NamedTuple{PAR}(p))
+LVector(NamedTuple{PAR}(p))
 
-nsum = _negate(sum)
+using GLM, DataFrames
+df = DataFrame(a=vcat(fill.(0:1, 6)...), b=1:12)
+probit_boot = glm(@formula(a ~ b), df, Binomial(), ProbitLink())
+(; (Symbol.(coefnames(probit_boot)) .=> coef(probit_boot))...)
+(; ((:km,:ks) .=> (1,2))...)
 
+Vector{
+    ForwardDiff.Dual{
+        ForwardDiff.Tag{typeof(floss1), Float64}, Float64, 5}
+        }
 
-
-
+LabelledArrays.LArray{
+    ForwardDiff.Dual{
+        ForwardDiff.Tag{typeof(floss1), Float64}, Float64, 5}, 1, Vector{ForwardDiff.Dual{ForwardDiff.Tag{typeof(floss1), Float64}, Float64, 5}}, (:ks, :km, :kd, :Y, :b)        

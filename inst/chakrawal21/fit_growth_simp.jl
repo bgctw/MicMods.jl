@@ -39,11 +39,11 @@ function gen_synthetic()
         solsyn = solsyn, pss = pss, systemt = systemts,
         obsqsyn=obsqsyn, σ_obsq=σ_obsq, obsq=obsq,
         obsr_totsyn=obsr_totsyn, σ_obsr_tot=σ_obsr_tot, obsr_tot=obsr_tot);
-    serialize("inst/chak21_syn.jls", chak21syn);
+    #serialize("inst/chak21_syn.jls", chak21syn); # does not work with closure functions
+    chak21syn
 end
 
-using Serialization
-chak21syn = deserialize("inst/chak21_syn.jls");
+chak21syn = gen_synthetic() #deserialize("inst/chak21_syn.jls");
 
 # find time of unlimited growth
 #tinfl = find_inflection(chak21syn.solsyn.t, chak21syn.obsr_tot)
@@ -51,7 +51,21 @@ tinfl0, ml = find_max(chak21syn.solsyn.t, chak21syn.obsr_tot);
 tinfl = 0.9 * tinfl0 # start shortly before maximum
 
 solver = Rodas5()
-tmp = fit_initial_lim(tinfl; systemt, chack21syn, solver)
+systemt = chak21_fixedr_system();
+psl0 = LabeledParSetter(systemt)
+popt0 = getpopt(psl0, systemt.prob)
+tmp = fit_initial_lim(tinfl, popt0; systemt, chak21syn, solver)
+
+function tmpf()
+    #tmp = systemt.predout(systemt.prob.u0, systemt.prob.p)
+    tmp = systemt.predout(first(solp.u), systemt.prob.p)
+    @code_warntype systemt.predout(first(solp.u), systemt.prob.p)
+    tmp.r_tot
+    getindex(tmp, :r_tot)
+    solp = solve(systemt.prob, solver)
+    prednew = systemt.predout.(solp.u, Ref(systemt.prob.p))
+    predr_tot = getindex.(prednew, :r_tot)
+end
 
 
 function tmpf()
