@@ -103,7 +103,8 @@ function LabeledParSetter(parsys::NTuple{NP,Symbol}, statesys::NTuple{NS,Symbol}
         iopt_for_iusys, num)
 end
 
-getpoptnames(ps::LabeledParSetter{PAR,ST,POPT,SOPT}) where {PAR,ST,POPT,SOPT} = POPT
+getoptnames(ps::LabeledParSetter{PAR,ST,POPT,SOPT}) where {PAR,ST,POPT,SOPT} = (POPT..., SOPT...)
+
 getparsys(ps::LabeledParSetter{PAR,ST,POPT,SOPT}) where {PAR,ST,POPT,SOPT} = PAR
 getstatesys(ps::LabeledParSetter{PAR,ST,POPT,SOPT}) where {PAR,ST,POPT,SOPT} = ST
 getpopt(ps::LabeledParSetter{PAR,ST,POPT,SOPT}) where {PAR,ST,POPT,SOPT} = POPT
@@ -122,7 +123,7 @@ type should correspond to original p and u0. If `p` is of type `SVector{3,Float6
 
 Value: Tuple (p, u0)
 """
-function setpu(ps::LabeledParSetter, popt, prob, ::Val{Labeled} = Val(false)) where Labeled
+function setpu(ps::LabeledParSetter, popt, prob, ::Val{Labeled} = Val(true)) where Labeled
     setpu(ps, popt, prob.p, prob.u0, Val(Labeled))
 end
 # function setpu(ps::LabeledParSetter, popt, p, u0)
@@ -204,6 +205,9 @@ function label_parsys(ps::LabeledParSetter{PAR,ST}, p) where {PAR, ST}
     #NamedTuple{PAR}(p) # not type stable for p Vector
     #(; (PAR .=> p)...) # not type stable for p Vector
 end
+function label_parsys(ps::LabeledParSetter{PAR,ST}, p::Union{LArray,SLArray}) where {PAR, ST}
+    @LArray p.__x PAR
+end
 
 """
     label_parsys(ps::LabeledParSetter, popt)
@@ -216,6 +220,13 @@ function label_statesys(ps::LabeledParSetter{PAR,ST}, u) where {PAR, ST}
     # ans .= u
     # ans
     @LArray u ST
+end
+function label_statesys(ps::LabeledParSetter{PAR,ST}, u::Union{LArray,SLArray}) where {PAR, ST}
+    #LVector(NamedTuple{ST}(u))
+    # ans = @LVector eltype(u) ST
+    # ans .= u
+    # ans
+    @LArray u.__x ST
 end
 
 
@@ -232,42 +243,44 @@ end
 function getpopt(ps::LabeledParSetter{PAR,ST,POPT,SOPT}, p, u0, ::Val{Labeled} = Val(true)) where {PAR,ST,POPT,SOPT,Labeled}
     if Labeled 
         vcat(
-            LVector(NamedTuple{POPT}(
-                p[ps.ipsys_for_ipopt])), 
-            LVector(NamedTuple{SOPT}(
-                    u0[ps.iusys_for_iuopt]))
-            )
+            @LArray(p[ps.ipsys_for_ipopt], POPT), 
+            @LArray(u0[ps.iusys_for_iuopt], SOPT), 
+        )
+        # vcat(
+        #     LVector(NamedTuple{POPT}(
+        #         )), 
+        #     LVector(NamedTuple{SOPT}(
+        #             ))
+        #     )
     else
         vcat(p[ps.ipsys_for_ipopt], u0[ps.iusys_for_iuopt])
     end
 end
-function getpopt(ps::LabeledParSetter{PAR,ST,POPT,SOPT}, p::StaticVector, u0::StaticVector, ::Val{Labeled} = Val(true)) where {PAR,ST,POPT,SOPT,Labeled}
-    if Labeled 
-        vcat(
-            SLVector(NamedTuple{POPT}(
-                p[ps.ipsys_for_ipopt])), 
-            SLVector(NamedTuple{SOPT}(
-                    u0[ps.iusys_for_iuopt]))
-            )
-    else
-        vcat(p[ps.ipsys_for_ipopt], u0[ps.iusys_for_iuopt])
-    end
-end
-
-
-# """
-#     label_popt(ps::LabeledParSetter, popt)
-
-# Create an LVector from parameter vector
-# """
-# function label_popt(ps::LabeledParSetter, popt)
-#     vcat(
-#         LVector(NamedTuple{map(x -> x.val.name, ps.paropt).data}(
-#             popt[1:length(ps.paropt)])), 
-#         LVector(NamedTuple{map(x -> x.val.f.name, ps.stateopt).data}(
-#             popt[length(ps.paropt)+1:end]))
-#         )
+# function getpopt(ps::LabeledParSetter{PAR,ST,POPT,SOPT}, p::StaticVector, u0::StaticVector, ::Val{Labeled} = Val(true)) where {PAR,ST,POPT,SOPT,Labeled}
+#     if Labeled 
+#         vcat(
+#             SLVector(NamedTuple{POPT}(
+#                 p[ps.ipsys_for_ipopt])), 
+#             SLVector(NamedTuple{SOPT}(
+#                     u0[ps.iusys_for_iuopt]))
+#             )
+#     else
+#         vcat(p[ps.ipsys_for_ipopt], u0[ps.iusys_for_iuopt])
+#     end
 # end
+
+
+"""
+    label_popt(ps::LabeledParSetter, popt)
+
+Create an LVector from parameter vector
+"""
+function label_popt(ps::LabeledParSetter{PAR,ST,POPT,SOPT,NP,NS,NPO, NSO}, popt) where {PAR,ST,POPT,SOPT, NP,NS,NPO, NSO}
+    vcat(
+        @LArray(popt[1:NPO], POPT), 
+        @LArray(popt[NPO+1:end], SOPT), 
+    )
+end
 
 # """
 #     parindex(ps::LabeledParSetter, sym::Symbol)

@@ -48,3 +48,6 @@ Vector{
 LabelledArrays.LArray{
     ForwardDiff.Dual{
         ForwardDiff.Tag{typeof(floss1), Float64}, Float64, 5}, 1, Vector{ForwardDiff.Dual{ForwardDiff.Tag{typeof(floss1), Float64}, Float64, 5}}, (:ks, :km, :kd, :Y, :b)        
+
+
+!(1.2 ≈ 1.3)

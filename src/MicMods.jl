@@ -4,15 +4,16 @@ using Base: thread_notifiers, Forward
 using ModelingToolkit, OrderedCollections
 using Distributions, StatsFuns
 using DifferentialEquations
-using MCMCChains
+using MCMCChains, Turing
 using StaticArrays, LabelledArrays
 using Loess, Polynomials, Optim, QuadGK
+using Suppressor
 
 export chak21_simp_system, chak21_phys_system, chak21_growth_system,
     chak21_growth_closed, chak21_fixedr_system,
     indexof, ParSetter, getpopt, setpu, parindex, stateindex, 
     label_parsys, label_statesys, label_popt, getpopt_static, 
-    getpoptnames, getparsys, getstatesys, getpopt,getsopt,
+    getoptnames, getparsys, getstatesys, getpopt,getsopt,
     LabeledParSetter,
     gettruncdist,
     kinresp_mic, kinresp_exp,

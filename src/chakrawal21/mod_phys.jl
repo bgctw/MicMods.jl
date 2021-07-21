@@ -31,6 +31,7 @@ function chak21_phys_system()
     @named chak21_phys = ODESystem(eqs)
     syss = structural_simplify(chak21_phys) 
     # see S5 for strawN
+    # TODO ask how create and out-of-place ODEProblem from system to use SA
     parms = [ks => 0.15, km => 2.62, kd => 1.35e-2, 
             Y => 0.72, # yield: 
             HB => -492, HS => -469,
@@ -54,6 +55,7 @@ function chak21_phys_system()
         (ks,km,kd,Y,HB,HS,kmr))
     #states_map = OrderedDict(x.f.name => x for x in states(syss))
     prob = chak21_problem(syss, x0, parms)
+    #prob.p = SVector{3}(prob.p)
     # parmspos and λ from closure
     function predout(u,p)
         local s,b,r,cr, 

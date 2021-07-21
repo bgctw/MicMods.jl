@@ -56,7 +56,7 @@ function find_max(x,y, p_untilmax=0.9)
     #imax = findmax(predict(ml1,x))[2]
     ex = extrema(x)
     #ftmp(x) = predict(ml, x)
-    xinfl0 = Optim.minimizer(optimize(x -> -predict(ml,x), ex[1], ex[2]))
+    xinfl0 = Optim.minimizer(optimize(x -> -Loess.predict(ml,x), ex[1], ex[2]))
     xinfl0, ml
     # int0, err = quadgk(ftmp, ex[1], xinfl0)
     # # start a bit before maximum
@@ -67,6 +67,6 @@ end
 
 function integrate_smoother(x, y, tend, t0  = zero(tend); ml = loess(x, y, span = 0.2)
     )
-    int0, err = quadgk(x -> predict(ml,x), t0, tend)
+    int0, err = quadgk(x -> Loess.predict(ml,x), t0, tend)
 end
 

@@ -1,6 +1,10 @@
 function chak21_problem(syss, x0, parms; ti=range(0,48,step = 1/4))
+    prob = ODEProblem{false}(syss, x0, extrema(ti), parms, saveat=ti, jac=true)
     prob = ODEProblem(syss, x0, extrema(ti), parms, saveat=ti, jac=true)
 end
+# function chak21_problem_static(syss, x0, ::Val{NU}, parms, Val{NP}; ti=range(0,48,step = 1/4)) where {NU, NP}
+#   prob = chak21_problem(syss, x0, parms; ti)
+# end
 
 indexof(sym,syms) = findfirst(isequal(sym),syms)
 
@@ -82,4 +86,5 @@ include("mod_phys.jl")
 include("mod_growth.jl")
 include("mod_growth_closed.jl")
 include("mod_phys_fixedr.jl")
-include("fit_phases.jl")
+include("fit_phases_lim.jl")
+include("fit_phases_growth.jl")
