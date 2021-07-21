@@ -77,9 +77,8 @@ function chak21_fixedr_system()
     end
     function adjust_p0u0(p,u)
         # subtract biomass from initial substrate, 
-        # initial substrate must be set as s0 + b0 - resp_gr:
+        # initial substrate must be set as s0 + b0 - cumresp_gr:
         # sum of carbon (s+b) at the amendment - respiration during growth phase
-        # for first round may assume: 0 = b0 << s0
         u[1] = u[1] - u[2]
         (p,u)
     end
