@@ -9,7 +9,7 @@
 using MicMods
 using ModelingToolkit, DifferentialEquations
 using StatsPlots
-using RecursiveArrayTools
+using RecursiveArrayTools, StaticArrays
 using Statistics
 using Random
 
@@ -66,7 +66,7 @@ p = popt1 = ans_optlim.popt
 function tmpf()
     pg = ans_optlim.popt0
     first(floss_lim(p))
-    first(@inferred floss_lim(ans_optlim.popt0))
+    #first(@inferred floss_lim(ans_optlim.popt0))
     @code_warntype floss_lim(p, ans_optlim.ps, ans_optlim.prob.p, ans_optlim.prob.u0)
     @code_warntype floss_lim(p)
     popt1 = first(ans_optlim)
@@ -82,12 +82,28 @@ function iplot()
     plot!( soll.t, soll[psl.num[:r_tot]], label= "r_tot opt")
     plot!(chak21syn.solsyn.t, chak21syn.solsyn[psl.num[:r_tot]], label = "r_tot syn" )
     #scatter!(chak21syn.solsyn.t, chak21syn.obsr_tot, label = "r_tot")
+    plot!(solf.t, solf[psg.num[:r_tot]])
+
 
     solg = flossg(poptg).sol;
     plot!( solg.t, solg[psl.num[:r_tot]], label= "r_tot opt gr")
+    label_statesys(psg, solg(tinfl))
+    label_statesys(psl, soll(tinfl))
 
-    using StatsPlots
-    plot(ans_optlim.chn)
+
+    @parameters t
+    @variables r_tot(t) b(t)
+    #@edit solg(tinfl)
+    observed(systemtf.syss)
+    rl = solg(solf.t; idxs=r_tot).u
+    #@edit solg(solf.t; idxs=r_tot)
+    plot(solf)
+    plot!(solf.t, rl)
+    observed(systemtg.syss)
+    # plot!( soll.t, solg(), label= "r_tot opt gr")
+
+    #using StatsPlots
+    plot(ans.chn)
     map(display, plotchain(get(chn, :log_density)));
     tmp = Array(chn[:,:,[1,2]]);
 
@@ -96,17 +112,17 @@ function iplot()
     poptt = label_popt(psl, vcat( ptrue[collect(getpopt(psl))], u0true[collect(getsopt(psl))] ))
     p = poptt
     u0true.s, u0true.b
-    popt1.b, 
 end
+
+
 
 #------------- optimize initial growth
 systemtg = chak21_phys_system();
 psg = LabeledParSetter(systemtg, paropt=(), stateopt=(:b,:r))
-pg[parindex.(Ref(psg), SA[:ks, :Y, :kd, :km])] .= popt1[[:ks, :Y, :kd, :km]];
 systemtg.prob.p[[findfirst(==(sym), getparsys(psg)) for sym in getpopt(psl)]] .= popt1[1:length(getpopt(psl))]
 popt0g = getpopt(psg, systemtg.prob) .* 1.1
 #label_parsys(psg, systemtg.prob.p)
-ans_g = fit_initial_growth(tinfl, copy(popt0g); systemtg, chak21syn, solver);
+ans_g = ans = fit_initial_growth(tinfl, copy(popt0g); systemtg, chak21syn, solver);
 poptg = ans_g.popt
 ans_g.ansopt
 flossg = ans_g.floss
@@ -117,20 +133,123 @@ function tmp()
     @code_warntype flossg(popt0g)
     flossg1(p) = first(flossg(p))
     flossg1(popt0g.__x)
-    using ForwardDiff
+    #using ForwardDiff
     ForwardDiff.gradient(flossg1, popt0g)
     #tmpf(p) = ForwardDiff.gradient(flossg1, popt0g)
     #@code_warntype tmpf(popt0g)
 end
 
-#----------------- optimize entire growth phase by Turing
+#-------------- optimize entire growth phase by Turing
+systemtf = systemtg;
+pf, u0f = setpu(psg, poptg, systemtg.prob) # parameters from growth phase
+solf = solve(systemtf.prob, p=pf.__x, u0= u0f.__x); 
+psf = LabeledParSetter(systemtf, paropt=(:ks, :km, :kd, :Y), stateopt=(:b,:r)) 
+
+pf,u0f = setpu(psg, poptg, systemtf.prob)
+popt0f = getpopt(psf, pf, u0f)
+
+ans_f = ans = fit_growth_and_lim(copy(popt0f); systemtf, chak21syn, solver);
+flossf = ans_f.floss
+flossf(popt0f)
+
+function tmpf_check_typestability()
+    ans_f = fit_growth_and_lim(copy(popt0f); systemtf, chak21syn, solver);
+    flossf = ans_f.floss
+    flossf(popt0f)
+    @code_warntype flossf(popt0f)
+    using ForwardDiff
+    ForwardDiff.gradient(x -> first(flossf(x)), popt0f)
+end
+
+function tmpf()
+    using Infiltrator
+    using Debugger
+    using Turing, MCMCChains
+    tlimfo = chak21syn.solsyn.t;
+    obsfr_tot = chak21syn.obsr_tot;
+    obsfq = chak21syn.obsq;   
+
+    sr = label_popt(psf, vcat(
+        [systemtf.searchranges_p[psf.num[key]] for key in getpopt(psf)],
+        [systemtf.searchranges_u0[psf.num[key]] for key in getsopt(psf)]
+    ))
+    # uses: sr, floss, σ_obsq, σ_obsr_tot
+    σ_obsq = chak21syn.σ_obsq
+    σ_obsr_tot = chak21syn.σ_obsr_tot
+    @model function fitqf(qobs, r_totobs,::Type{T} = Float64) where {T}
+        p = Vector{T}(undef, length(sr))
+        for (i,r) = enumerate(sr)
+             p[i] ~ gettruncdist(r...)
+        end
+        #@infiltrate
+        #Debugger.@bp
+        if !isa(_context, Turing.PriorContext)
+            lossval, solp, predq, predr_tot = flossf(p);
+            if !isfinite(lossval) 
+                Turing.@addlogprob! -Inf; return
+            end
+            # for (i, qp) = enumerate(predq)
+            #     qobsl[i] ~ Normal(qp, σ_obsq)
+            # end
+            for (i, rp) = enumerate(predr_tot)
+                r_totobs[i] ~ Normal(rp, σ_obsr_tot)
+            end
+        end
+    end
+    model = fitqf(obsfq, obsfr_tot)
 
 
+    varinfo = Turing.VarInfo(model);
+    model(varinfo, Turing.SampleFromPrior(), Turing.PriorContext(popt0f.__x))
+    initθ = varinfo[Turing.SampleFromPrior()]
+
+    # chain = sample(model, NUTS(), 100, init_theta=popt0f.__x, discard_adapt = false, init_params = popt0f.__x)
+    chain = sample(model, NUTS(), MCMCThreads(), 300, 3, init_theta=popt0f.__x, discard_adapt = false, init_params = popt0f.__x)
+    #@edit sample(model, NUTS(), 100, init_theta=popt0f.__x, drop_warmup = false)
+    chain = replacenames(chain, Dict("p[$i]" => pname for (i,pname) in 
+        enumerate(MicMods.replacetby0(getoptnames(psf)))))
+    plot(chain)
+    get(chain, :step_size)    chain = sample(model, NUTS(), MCMCThreads(), 300, 3, init_theta=popt0f.__x, discard_adapt = false, init_params = popt0f.__x)
+    #@edit sample(model, NUTS(), 100, init_theta=popt0f.__x, drop_warmup = false)
+    chain = replacenames(chain, Dict("p[$i]" => pname for (i,pname) in 
+        enumerate(MicMods.replacetby0(getoptnames(psf)))))
+    plot(chain)
 
 
+    #tmp = sample(model_func, MH(), 10)
+    #tmp = @suppress_err sample(model_func, NUTS(), 10)
+    chn = sample(model, NUTS(),  MCMCThreads(), 10, 3, 
+        theta_init = repeat(popt0f.__x, 1, 3)
+        );
+    #popt1 = MicMods.label_popt(psf, MicMods.best_estimate(chn))
+    poptof = label_popt(psf, best_estimate(chn))
+    
+end
 
-
-
+function tmpf_explore_NUTS()
+    using Turing, MCMCChains
+    using StatsPlots
+    n = 30
+    obs = 2 .+ randn(n)
+    @model function fitsimp(obs,::Type{T} = Float64) where {T}
+        m ~ Normal()
+        #@infiltrate
+        #Debugger.@bp
+        if !isa(_context, Turing.PriorContext)
+            for (i, o) = enumerate(obs)
+                obs[i] ~ Normal(m)
+            end
+        end
+    end
+    model = fitsimp(obs)
+    #https://github.com/TuringLang/Turing.jl/pull/784
+    chain = sample(model, NUTS(20, 0.65), 100, discard_adapt = false)
+    plot(chain)
+    # https://github.com/TuringLang/Turing.jl/issues/1588
+    chain = sample(model, NUTS(20, 0.65), 100, discard_adapt = false, init_params = [3.0])
+    chain = sample(model, NUTS(20, 0.65), MCMCThreads(), 100, 3, discard_adapt = false, init_params = [5.0])
+    # can only specify a single initial that is reused in all threads
+end
 
 
 

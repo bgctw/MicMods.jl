@@ -126,26 +126,6 @@ Value: Tuple (p, u0)
 function setpu(ps::LabeledParSetter, popt, prob, ::Val{Labeled} = Val(true)) where Labeled
     setpu(ps, popt, prob.p, prob.u0, Val(Labeled))
 end
-# function setpu(ps::LabeledParSetter, popt, p, u0)
-#     # return type of p and u0 instead of Vector, need constructor on generator
-#     # generator only works in special cases
-#     # pnew = typeof(p)( (ps.ispopt[i] ? 
-#     #         popt[ps.ipopt_for_ipsys[i]] : p[i] for i in axes(p,1)) )
-#     # # pnew::Vector{eltype(popt)} = [ps.ispopt[i] ? 
-#     # #     popt[ps.ipopt_for_ipsys[i]] : p[i] for i in axes(p,1)]
-#     # u0new = typeof(u0)( (ps.isuopt[i] ? 
-#     #         #note usage of popt[iopt] , indexing into the full optim vector with u after p
-#     #         popt[ps.iopt_for_iusys[i]] : u0[i] for i in axes(u0,1)) )
-#     #     # u0new::Vector{eltype(popt)} = [ps.isuopt[i] ? 
-#     #     # #note usage of popt[iopt] , indexing into the full optim vector with u after p
-#     #     # popt[ps.iopt_for_iusys[i]] : u0[i] for i in axes(u0,1)]
-#     pnew = p .* zero(eltype(p)) .+ (ps.ispopt[i] ? 
-#              popt[ps.ipopt_for_ipsys[i]] : p[i] for i in axes(p,1)) 
-#     u0new = u0 .* zero(eltype(u0)) .+ (ps.isuopt[i] ? 
-#             #note usage of popt[iopt] , indexing into the full optim vector with u after p
-#             popt[ps.iopt_for_iusys[i]] : u0[i] for i in axes(u0,1))
-#     (pnew, u0new)
-# end
 
 function setpu(ps::LabeledParSetter, popt, p, u0, ::Val{Labeled} = Val(true)) where Labeled
     # superseded: eltype of new p aund u0 should correspond to eltype of popt
